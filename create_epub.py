@@ -1,29 +1,71 @@
 from ebooklib import epub
 from htmldom import htmldom
 from argparse import ArgumentParser
+import urllib.request
+from urllib.parse import urlparse
 
-def extract_chapter(url,container_id):
+def get_file(url):
+    path = urlparse(url)
+    
+    with urllib.request.urlopen(url) as f:
+        out = f.read() 
+        return out
+        #with open(outfilename, 'wb') as file:
+        #    file.write(out)
+
+def find_images(book,dom):
+    img_dict = {}
+    imgs = dom.find( "img" )
+    for img in imgs:
+        path = urlparse(img.attr('src'))
+        outfilename = (path.netloc + path.path).replace("/","_")
+        img.attr('src', "imgs/"+outfilename)
+        
+        img_dict[outfilename] = {}
+        
+    for key, value in img_dict.items():
+        content = get_file(key)
+        
+        if content:
+            img_item = epub.EpubItem(file_name="imgs/"+key, media_type="image/png", content=content)
+            book.add_item(img_item)
+        
+        #with open(key, 'rb') as file:
+        #    print(key)
+        #    
+        #    img_item = epub.EpubItem(file_name="imgs/"+key, media_type="image/png", content=file.read())
+        #    book.add_item(img_item)
+def extract_chapter(book,url,container_id):
     dom = htmldom.HtmlDom(url).createDom()
+
+    find_images(book,dom)
 
     title = dom.find( "title" )
     
     content = "<html><head>"
     content = content + title.html()
     content = content + "</head>"
-    content = content + "<body>"
+    
     divs = dom.find( "div" )
     
-    for div in divs:
-        if div.attr('id') == container_id:
-            pass
-            content = content + div.html()
+    print(container_id)
+    if container_id == None:
+        print("No div id so using raw document.")
+        content= content + dom.find("body").html()
+    else:
+        content = content + "<body>"
+        for div in divs:
+            print(div.attr('id'))
+            if div.attr('id') == container_id:
+                pass
+                content = content + div.html()
     
-    content = content + "</body>"
+        content = content + "</body>"
     
     return (title.text(), content)
 
 def add_chapter(url,container_id,index,chapters,book):
-    title, content = extract_chapter(url,container_id)
+    title, content = extract_chapter(book,url,container_id)
     
     # create chapter  
     print(title)
