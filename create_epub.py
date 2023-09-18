@@ -4,6 +4,7 @@ from argparse import ArgumentParser
 import urllib.request
 from urllib.parse import urlparse
 from jsonc_parser.parser import JsoncParser
+import os.path
 
 class EpubProcessor:
     def __init__(self,title="No Title", author="Testy McTestFace"):
@@ -19,13 +20,26 @@ class EpubProcessor:
         self.index=1
 
     def get_file(self,url):
+        out = None
         path = urlparse(url)
+
+        outfilename = (path.netloc + path.path).replace("/","_")
+        if os.path.isfile(outfilename):
+            with open(outfilename,"rb") as f:
+                out = f.read()    
         
-        with urllib.request.urlopen(url) as f:
-            out = f.read() 
+        if not out:
+            with urllib.request.urlopen(url) as f:
+                out = f.read() 
+
+                with open(outfilename,"wb") as f_out:
+                    f_out.write(out)
+                    f_out.close()
+                return out
+                #with open(outfilename, 'wb') as file:
+                #    file.write(out)
+        else:
             return out
-            #with open(outfilename, 'wb') as file:
-            #    file.write(out)
 
     def find_images(self,dom):
         
@@ -43,8 +57,16 @@ class EpubProcessor:
             content = self.get_file(value['orignal_url'])
             
             if content and value['added'] == False:
-                print(value)
-                img_item = epub.EpubItem(file_name="imgs/"+key, media_type="image/png", content=content)
+                print("Type:",key.split('.')[-1])
+                file_type = key.split('.')[-1]
+                if file_type == "jpg" or file_type == "jpeg":
+                    mime_type = "image/jpeg"
+                elif file_type == "png":
+                    mime_type = "image/png"
+                else:
+                    raise Exception("Unknown Mime type.")
+
+                img_item = epub.EpubItem(file_name="imgs/"+key, media_type=mime_type, content=content)
                 self.book.add_item(img_item)
                 value["added"] = True
             #with open(key, 'rb') as file:
@@ -57,7 +79,7 @@ class EpubProcessor:
 
         dom = htmldom.HtmlDom().createDom(html_string)
 
-        self.find_images(dom)
+        #self.find_images(dom)
 
         title = dom.find( "title" )
         
@@ -76,11 +98,11 @@ class EpubProcessor:
             for div in divs:
                 print(div.attr('id'))
                 if div.attr('id') == container_id:
+                    self.find_images(div)
                     pass
                     content = content + div.html()
         
             content = content + "</body>"
-        
         return (title.text(), content)
 
     def add_chapter(self,html,container_id):
@@ -99,6 +121,7 @@ class EpubProcessor:
 
     def generate_book(self,output_filename):
         # define Table Of Contents
+        print(self.chapters)
         self.book.toc = (self.chapters)
 
         # add default NCX and Nav file
@@ -123,9 +146,10 @@ parser.add_argument('--div_id',help='id of div to use to get content from in HTM
 parser.add_argument('--title',help='title of book')
 parser.add_argument('--author',help='author')
 parser.add_argument('--json',help='add files as drescribed by the json file')
-parser.add_argument('--html', action='append',help='foo help')
+parser.add_argument('--html', nargs='+',action='append',help='foo help')
 parser.add_argument('--md', action='append',help="add markdown document to book")
-parser.add_argument('--out',help='output filename')
+parser.add_argument('--cover', help="add cover to book")
+parser.add_argument('--out',help='output filename',required=True)
 args = parser.parse_args()
 
 epub_processor = EpubProcessor(title=args.title,author=args.author)
@@ -173,11 +197,22 @@ if args.md:
         epub_processor.add_chapter(content,None)
 
 if args.html:
+    if args.cover:
+        with open(args.cover,"rb") as f:
+            cover = f.read()
+            epub_processor.book.set_cover("image.jpg", cover)
     for url in args.html:
-        print("##### %s looking for '%s'" % (url, args.div_id))
-        div_id = args.div_id
-        
-        with open(url,'r') as file:
-            epub_processor.add_chapter(file.read(), div_id)
+        if type(url) == list:
+            for url_item in url:
+                div_id = args.div_id
+                
+                with open(url_item,'r') as file:
+                    epub_processor.add_chapter(file.read(), div_id)
+        else:        
+            print("##### %s looking for '%s'" % (url, args.div_id))
+            div_id = args.div_id
+            
+            with open(url,'r') as file:
+                epub_processor.add_chapter(file.read(), div_id)
 
 epub_processor.generate_book(args.out)
