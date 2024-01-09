@@ -1,9 +1,9 @@
 #!/bin/bash
 # This is adapted from a script I found years ago.
-# to run type: ./backup-rsync <source> <dest folder>
+# to run type: ./backup-rsync <source> <dest folder> <backup-id>
 # This will create a folder with daily/weekly (as appropriate)
 # containing an incremental backup of source.
-backup_id=backup_nas_photos
+backup_id="$3"
 
 DAILY_BACKUP_TIME='6'
 WEEKLY_BACKUP_DAY='6' # Do our weekly backup on Saturday
@@ -65,9 +65,6 @@ echo "--- backup completed output ---"
 cat /ramtmp/backup_output.txt
 
 echo "end time:"`date`
-
-#rsync --delete -a -v louis@LOUPC-DESKTOP:/cygdrive/c/Users/louis/AppData /mnt/storage1/backup/louise
-#rsync -a -v  /home/louise/ louis@LOUPC-DESKTOP:/cygdrive/d/Backups/current
 
 rm /ramtmp/shutdown_locks/$backup_id
 rm /ramtmp/shutdown_locks/default
